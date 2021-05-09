@@ -1,0 +1,45 @@
+dns_zone_notifyreceive
+        if (have_serial) {
+                dns_zone_log(zone, ISC_LOG_INFO, "notify from %s: serial %u",
+                             fromtext, serial);
+        }
+
+        dns_zone_refresh(zone);
+
+dns_zone_refresh:
+        queue_soa_query();
+
+
+
+
+zmgr_start_xfrin_ifquota
+        gotquota:
+        /*
+         * We have sufficient quota.  Move the zone to the "xfrin_in_progress"
+         * list and send it an event to let it start the actual transfer in the
+         * context of its own task.
+         */
+        e = isc_event_allocate(zmgr->mctx, zmgr, DNS_EVENT_ZONESTARTXFRIN,
+                               got_transfer_quota, zone, sizeof(isc_event_t));
+
+        LOCK_ZONE(zone);
+        INSIST(zone->statelist == &zmgr->waiting_for_xfrin);
+        ISC_LIST_UNLINK(zmgr->waiting_for_xfrin, zone, statelink);
+        ISC_LIST_APPEND(zmgr->xfrin_in_progress, zone, statelink);
+        zone->statelist = &zmgr->xfrin_in_progress;
+        isc_task_send(zone->task, &e);
+        dns_zone_logc(zone, DNS_LOGCATEGORY_XFER_IN, ISC_LOG_INFO,
+                      "Transfer started.");
+        UNLOCK_ZONE(zone);
+
+        return (ISC_R_SUCCESS);
+
+queue_xfrin:
+zmgr_resume_xfrs:
+
+soa_query:
+        queue_xfrin:
+
+queue_soa_query:
+        e = isc_event_allocate(zone->mctx, NULL, DNS_EVENT_ZONE, soa_query,
+                               zone, sizeof(isc_event_t));
